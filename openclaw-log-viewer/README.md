@@ -2,6 +2,20 @@
 
 一个轻量的 Flask Web 应用，用于可视化查看 OpenClaw 产生的 LLM API 调用日志。
 
+## 截图预览
+
+**会话列表（主页）**
+![主页](docs/main_page.png)
+
+**Agent Run 概览**
+![Agent Run](docs/agent_run.png)
+
+**LLM 请求详情**
+![LLM 请求](docs/llm_requests.png)
+
+**LLM 响应 / SSE 事件**
+![LLM 响应](docs/llm_response.png)
+
 ## 快速启动
 
 ```bash
