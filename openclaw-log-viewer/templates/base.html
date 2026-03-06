@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}OpenClaw LLM 日志{% endblock %}</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/json-formatter-js@2.3.4/dist/json-formatter.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #f0f2f5;
+            color: #1a202c;
+            min-height: 100vh;
+        }
+
+        .site-header {
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+            color: white;
+            padding: 20px 32px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        }
+
+        .site-header h1 { font-size: 1.4em; font-weight: 700; }
+        .site-header .subtitle { font-size: 0.85em; opacity: 0.75; margin-top: 2px; }
+        .site-header a { color: #90cdf4; text-decoration: none; }
+        .site-header a:hover { text-decoration: underline; }
+
+        .container { max-width: 1400px; margin: 0 auto; padding: 24px 20px; }
+
+        /* Cards */
+        .card {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+
+        .card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid #e2e8f0;
+            font-weight: 600;
+            font-size: 1em;
+            background: #f7fafc;
+        }
+
+        .card-body { padding: 20px; }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.75em;
+            font-weight: 600;
+        }
+        .badge-provider { background: #bee3f8; color: #2b6cb0; }
+        .badge-model   { background: #fefcbf; color: #744210; }
+        .badge-api     { background: #e9d8fd; color: #553c9a; }
+        .badge-error   { background: #fed7d7; color: #c53030; }
+        .badge-ok      { background: #c6f6d5; color: #276749; }
+        .badge-count   { background: #e2e8f0; color: #4a5568; }
+
+        /* Collapsible */
+        .collapsible-header {
+            padding: 12px 16px;
+            cursor: pointer;
+            user-select: none;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #edf2f7;
+            border-radius: 6px;
+        }
+        .collapsible-header:hover { background: #e2e8f0; }
+        .collapsible-body {
+            display: none;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            border-top: none;
+            border-radius: 0 0 6px 6px;
+            background: #fafafa;
+        }
+        .collapsible-body.open { display: block; }
+
+        /* Code / JSON */
+        .code-block {
+            background: #1a202c;
+            color: #e2e8f0;
+            border-radius: 6px;
+            padding: 14px 16px;
+            font-family: "SF Mono", "Consolas", monospace;
+            font-size: 0.82em;
+            overflow-x: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .json-formatter-container {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            max-height: 600px;
+            overflow: auto;
+        }
+
+        /* Tables */
+        table { width: 100%; border-collapse: collapse; }
+        th { background: #f7fafc; padding: 10px 14px; text-align: left; font-size: 0.85em; font-weight: 600; color: #4a5568; border-bottom: 2px solid #e2e8f0; }
+        td { padding: 10px 14px; border-bottom: 1px solid #f0f0f0; font-size: 0.9em; vertical-align: top; }
+        tr:hover td { background: #f7fafc; }
+
+        /* Tabs */
+        .tabs { display: flex; gap: 4px; border-bottom: 2px solid #e2e8f0; margin-bottom: 16px; }
+        .tab-btn {
+            padding: 8px 16px;
+            border: none;
+            background: none;
+            cursor: pointer;
+            border-radius: 6px 6px 0 0;
+            font-size: 0.9em;
+            color: #718096;
+            border-bottom: 2px solid transparent;
+            margin-bottom: -2px;
+        }
+        .tab-btn.active { color: #3182ce; border-bottom-color: #3182ce; font-weight: 600; background: #ebf8ff; }
+        .tab-btn:hover:not(.active) { background: #f7fafc; color: #4a5568; }
+        .tab-panel { display: none; }
+        .tab-panel.active { display: block; }
+
+        /* Misc */
+        .monospace { font-family: monospace; font-size: 0.85em; }
+        .text-muted { color: #718096; }
+        .text-sm { font-size: 0.85em; }
+        .mt-2 { margin-top: 8px; }
+        .mt-4 { margin-top: 16px; }
+        .mb-4 { margin-bottom: 16px; }
+        .flex { display: flex; }
+        .flex-wrap { flex-wrap: wrap; }
+        .gap-2 { gap: 8px; }
+        .items-center { align-items: center; }
+
+        /* Markdown output */
+        .markdown-body h1, .markdown-body h2, .markdown-body h3 { margin: 12px 0 6px; }
+        .markdown-body p { margin: 6px 0; line-height: 1.6; }
+        .markdown-body code { background: #f0f0f0; padding: 2px 5px; border-radius: 3px; font-size: 0.9em; }
+        .markdown-body pre { background: #1a202c; color: #e2e8f0; padding: 12px; border-radius: 6px; overflow-x: auto; margin: 8px 0; }
+        .markdown-body pre code { background: none; color: inherit; }
+        .markdown-body ul, .markdown-body ol { padding-left: 20px; margin: 6px 0; }
+
+        /* Toggle arrow */
+        .arrow { transition: transform 0.2s; display: inline-block; }
+        .arrow.open { transform: rotate(90deg); }
+    </style>
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+<header class="site-header">
+    <div>
+        <h1>🦀 OpenClaw LLM 日志查看器</h1>
+        <div class="subtitle">{% block subtitle %}查看所有 LLM API 交互记录{% endblock %}</div>
+    </div>
+    <div style="margin-left:auto">
+        <a href="/">← 会话列表</a>
+    </div>
+</header>
+<div class="container">
+    {% block content %}{% endblock %}
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/json-formatter-js@2.3.4/dist/json-formatter.umd.js"></script>
+<script>
+function toggleCollapsible(el) {
+    const body = el.nextElementSibling;
+    const arrow = el.querySelector('.arrow');
+    if (body && body.classList.contains('collapsible-body')) {
+        body.classList.toggle('open');
+        if (arrow) arrow.classList.toggle('open');
+    }
+}
+
+function switchTab(groupId, tabId) {
+    const container = document.getElementById(groupId);
+    if (!container) return;
+    container.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    container.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+    const btn = container.querySelector(`[data-tab="${tabId}"]`);
+    const panel = container.querySelector(`#${tabId}`);
+    if (btn) btn.classList.add('active');
+    if (panel) panel.classList.add('active');
+}
+
+function initJsonFormatter(containerId, dataId) {
+    const dataEl = document.getElementById(dataId);
+    const container = document.getElementById(containerId);
+    if (!dataEl || !container) return;
+    try {
+        const data = JSON.parse(dataEl.textContent);
+        const formatter = new JSONFormatter(data, 1, {
+            hoverPreviewEnabled: true,
+            hoverPreviewArrayCount: 5,
+            hoverPreviewFieldCount: 5,
+        });
+        container.appendChild(formatter.render());
+    } catch (e) {
+        container.textContent = dataEl.textContent;
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Activate first tab in each tab group
+    document.querySelectorAll('.tab-group').forEach(function(group) {
+        const firstBtn = group.querySelector('.tab-btn');
+        const firstPanel = group.querySelector('.tab-panel');
+        if (firstBtn) firstBtn.classList.add('active');
+        if (firstPanel) firstPanel.classList.add('active');
+    });
+});
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

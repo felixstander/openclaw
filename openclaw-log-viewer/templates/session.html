@@ -1,0 +1,689 @@
+{% extends "base.html" %}
+
+{% block title %}会话详情 - {{ session_id[:40] }}{% endblock %}
+{% block subtitle %}Session: {{ session_id[:60] }}{% endblock %}
+
+{% block extra_css %}
+<style>
+    .run-card {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        margin-bottom: 24px;
+        overflow: hidden;
+    }
+    .run-header {
+        padding: 16px 20px;
+        background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+        color: white;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+    }
+    .run-header h3 { font-size: 0.95em; font-weight: 700; }
+    .run-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+
+    .llm-call-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 8px;
+        margin-bottom: 12px;
+        overflow: hidden;
+    }
+    .llm-call-header {
+        padding: 10px 16px;
+        background: #f7fafc;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        cursor: pointer;
+        user-select: none;
+        font-size: 0.9em;
+    }
+    .llm-call-header:hover { background: #edf2f7; }
+    .llm-call-body {
+        display: none;
+        border-top: 1px solid #e2e8f0;
+    }
+    .llm-call-body.open { display: block; }
+
+    .payload-summary {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        padding: 10px 16px;
+        background: #f0f9ff;
+        border-bottom: 1px solid #bee3f8;
+        font-size: 0.85em;
+    }
+    .payload-summary .item { display: flex; gap: 4px; align-items: center; }
+    .payload-summary .label { color: #718096; }
+    .payload-summary .value { font-weight: 600; color: #2d3748; }
+
+    .response-box {
+        background: #f0fff4;
+        border-left: 4px solid #48bb78;
+        padding: 14px 16px;
+        border-radius: 6px;
+        margin: 12px 0;
+    }
+    .thinking-box {
+        background: #fffbeb;
+        border-left: 4px solid #f6ad55;
+        padding: 14px 16px;
+        border-radius: 6px;
+        margin: 12px 0;
+    }
+    .tool-call-box {
+        background: #ebf4ff;
+        border: 1px solid #bee3f8;
+        border-radius: 6px;
+        margin: 8px 0;
+        overflow: hidden;
+    }
+    .tool-call-header {
+        padding: 8px 12px;
+        background: #bee3f8;
+        font-weight: 600;
+        font-size: 0.85em;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .tool-call-body { padding: 10px 12px; }
+
+    .usage-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+        gap: 10px;
+        margin-top: 10px;
+    }
+    .usage-item {
+        background: #f7fafc;
+        border-radius: 6px;
+        padding: 10px 12px;
+        text-align: center;
+    }
+    .usage-item .label { font-size: 0.75em; color: #718096; margin-bottom: 4px; }
+    .usage-item .value { font-size: 1.1em; font-weight: 700; color: #2d3748; }
+
+    .error-box {
+        background: #fff5f5;
+        border-left: 4px solid #fc8181;
+        padding: 12px 16px;
+        border-radius: 6px;
+        color: #c53030;
+        margin: 10px 0;
+        font-size: 0.9em;
+    }
+    .sse-event-list {
+        background: #f7fafc;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 10px 12px;
+        min-height: 36px;
+    }
+    .sse-badge-btn {
+        cursor: pointer;
+        border: none;
+        outline: none;
+        transition: opacity 0.15s, transform 0.1s;
+    }
+    .sse-badge-btn:hover { opacity: 0.8; transform: scale(1.05); }
+
+    /* SSE 事件详情 Modal */
+    .sse-modal-overlay {
+        display: none;
+        position: fixed;
+        inset: 0;
+        background: rgba(0,0,0,0.45);
+        z-index: 1000;
+        align-items: center;
+        justify-content: center;
+    }
+    .sse-modal-overlay.open { display: flex; }
+    .sse-modal {
+        background: white;
+        border-radius: 10px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.25);
+        width: min(700px, 92vw);
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+    .sse-modal-header {
+        padding: 14px 20px;
+        background: linear-gradient(135deg, #1a1a2e 0%, #0f3460 100%);
+        color: white;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 0.9em;
+        font-weight: 600;
+    }
+    .sse-modal-close {
+        background: none;
+        border: none;
+        color: white;
+        font-size: 1.3em;
+        cursor: pointer;
+        padding: 0 4px;
+        line-height: 1;
+        opacity: 0.8;
+    }
+    .sse-modal-close:hover { opacity: 1; }
+    .sse-modal-body {
+        padding: 16px;
+        overflow-y: auto;
+        flex: 1;
+    }
+    .sse-modal-nav {
+        padding: 10px 20px;
+        border-top: 1px solid #e2e8f0;
+        background: #f7fafc;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        font-size: 0.85em;
+        color: #4a5568;
+    }
+    .sse-modal-nav button {
+        padding: 4px 12px;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        background: white;
+        cursor: pointer;
+        font-size: 0.85em;
+    }
+    .sse-modal-nav button:hover { background: #edf2f7; }
+    .sse-modal-nav button:disabled { opacity: 0.4; cursor: default; }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- SSE 事件详情 Modal -->
+<div class="sse-modal-overlay" id="sse-modal-overlay" onclick="closeSseModal(event)">
+    <div class="sse-modal" onclick="event.stopPropagation()">
+        <div class="sse-modal-header">
+            <span id="sse-modal-title">SSE 事件详情</span>
+            <button class="sse-modal-close" onclick="closeSseModal()">&#x2715;</button>
+        </div>
+        <div class="sse-modal-body">
+            <div id="sse-modal-json" class="json-formatter-container" style="border:none;padding:0"></div>
+        </div>
+        <div class="sse-modal-nav">
+            <button id="sse-nav-prev" onclick="navigateSseModal(-1)">&#x25C0; 上一个</button>
+            <span id="sse-nav-label" style="flex:1;text-align:center"></span>
+            <button id="sse-nav-next" onclick="navigateSseModal(1)">下一个 &#x25B6;</button>
+        </div>
+    </div>
+</div>
+
+<div style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center">
+    <div>
+        <span class="text-muted text-sm">共 <strong>{{ total_runs }}</strong> 个 Agent Run</span>
+    </div>
+    <a href="/" style="color:#3182ce; text-decoration:none; font-size:0.9em">← 返回列表</a>
+</div>
+
+{% for run in runs %}
+{% set run_idx = loop.index %}
+<div class="run-card">
+    <!-- Run 头部 -->
+    <div class="run-header">
+        <div style="flex:1">
+            <h3>&#x1F4AC; Agent Run #{{ loop.index }}</h3>
+            <div class="run-meta">
+                {% if run.provider %}<span class="badge badge-provider">{{ run.provider }}</span>{% endif %}
+                {% if run.model_id %}<span class="badge badge-model">{{ run.model_id }}</span>{% endif %}
+                {% if run.model_api %}<span class="badge badge-api">{{ run.model_api }}</span>{% endif %}
+                {% if run.error %}
+                    <span class="badge badge-error">&#x274C; 出错</span>
+                {% else %}
+                    <span class="badge badge-ok">&#x2705; 完成</span>
+                {% endif %}
+                <span class="badge badge-count">{{ run.llm_call_count }} 次 LLM 调用</span>
+            </div>
+        </div>
+        <div style="text-align:right; font-size:0.8em; opacity:0.85">
+            <div>开始: {{ run.first_ts }}</div>
+            {% if run.duration %}<div>耗时: {{ run.duration }}</div>{% endif %}
+        </div>
+    </div>
+
+    <div style="padding:20px">
+
+        <!-- 标签页导航 -->
+        <div class="tab-group" id="run-tabs-{{ loop.index }}">
+            <div class="tabs">
+                <button class="tab-btn" data-tab="tab-response-{{ loop.index }}"
+                    onclick="switchTab('run-tabs-{{ loop.index }}', 'tab-response-{{ loop.index }}')">
+                    &#x1F4AC; 对话响应
+                </button>
+                <button class="tab-btn" data-tab="tab-requests-{{ loop.index }}"
+                    onclick="switchTab('run-tabs-{{ loop.index }}', 'tab-requests-{{ loop.index }}')">
+                    &#x1F4E4; LLM 请求 ({{ run.llm_call_count }})
+                </button>
+                <button class="tab-btn" data-tab="tab-usage-{{ loop.index }}"
+                    onclick="switchTab('run-tabs-{{ loop.index }}', 'tab-usage-{{ loop.index }}')">
+                    &#x1F4CA; Token 用量
+                </button>
+            </div>
+
+            <!-- 对话响应标签页 -->
+            <div class="tab-panel" id="tab-response-{{ loop.index }}">
+                {% if run.error %}
+                <div class="error-box">
+                    <strong>&#x274C; 错误:</strong> {{ run.error }}
+                </div>
+                {% endif %}
+
+                {% if run.user_message %}
+                <div style="background:#ebf8ff; border-left:4px solid #63b3ed; padding:14px 16px; border-radius:6px; margin-bottom:12px">
+                    <strong style="color:#2b6cb0; font-size:0.85em">&#x1F464; 用户消息</strong>
+                    <div class="markdown-body mt-2" style="font-size:0.9em">{{ run.user_message | markdown }}</div>
+                </div>
+                {% endif %}
+
+                {% if run.response_thinking %}
+                <div class="thinking-box">
+                    <strong style="color:#744210; font-size:0.85em">&#x1F9E0; 思考过程 (Thinking)</strong>
+                    <div class="markdown-body mt-2" style="font-size:0.9em">{{ run.response_thinking | markdown }}</div>
+                </div>
+                {% endif %}
+
+                {% if run.response_text %}
+                <div class="response-box">
+                    <strong style="color:#276749; font-size:0.85em">&#x1F916; 助手回复</strong>
+                    <div class="markdown-body mt-2">{{ run.response_text | markdown }}</div>
+                </div>
+                {% elif not run.error %}
+                <p class="text-muted text-sm" style="padding:20px; text-align:center">
+                    {% if run.llm_call_count > 0 %}
+                    此 Run 以工具调用结束（无最终文字回复）
+                    {% else %}
+                    暂无响应数据
+                    {% endif %}
+                </p>
+                {% endif %}
+
+                {% if run.response_tool_calls %}
+                <div class="mt-4">
+                    <strong style="font-size:0.9em; color:#4a5568">&#x1F527; 工具调用 (最后一轮)</strong>
+                    {% for tc in run.response_tool_calls %}
+                    <div class="tool-call-box mt-2">
+                        <div class="tool-call-header">
+                            <span>&#x1F527; {{ tc.name or "unknown" }}</span>
+                            {% if tc.id %}<span class="text-muted text-sm monospace">{{ tc.id }}</span>{% endif %}
+                        </div>
+                        <div class="tool-call-body">
+                            <div class="code-block">{{ tc.input | safe_json_filter }}</div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- LLM 请求标签页 -->
+            <div class="tab-panel" id="tab-requests-{{ loop.index }}">
+                {% if not run.requests %}
+                <p class="text-muted text-sm" style="padding:20px; text-align:center">此 Run 无请求数据（可能尚未完成）</p>
+                {% else %}
+                <p class="text-sm text-muted mb-4">
+                    共 {{ run.requests | length }} 次 LLM API 调用，每次调用包含完整上下文。
+                    展开查看发送给 LLM 的完整 payload。
+                </p>
+                {% for req in run.requests %}
+                <div class="llm-call-card">
+                    <div class="llm-call-header" onclick="toggleLlmCall(this)">
+                        <div style="display:flex; align-items:center; gap:10px">
+                            <span class="arrow">&#x25B6;</span>
+                            <strong>第 {{ req.index }} 次调用</strong>
+                            <span class="text-muted text-sm">{{ req.ts }}</span>
+                        </div>
+                        <div style="display:flex; gap:6px; flex-wrap:wrap">
+                            {% if req.summary.model %}
+                            <span class="badge badge-model text-sm">{{ req.summary.model }}</span>
+                            {% endif %}
+                            {% if req.summary.messages_count %}
+                            <span class="badge badge-count">{{ req.summary.messages_count }} 条消息</span>
+                            {% endif %}
+                            {% if req.summary.tools_count %}
+                            <span class="badge badge-api">{{ req.summary.tools_count }} 个工具</span>
+                            {% endif %}
+                            {% if req.summary.max_tokens %}
+                            <span class="badge badge-count">max_tokens={{ req.summary.max_tokens }}</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="llm-call-body">
+                        <!-- 摘要行 -->
+                        <div class="payload-summary">
+                            {% if req.summary.model %}
+                            <div class="item"><span class="label">模型:</span><span class="value">{{ req.summary.model }}</span></div>
+                            {% endif %}
+                            <div class="item"><span class="label">消息数:</span><span class="value">{{ req.summary.messages_count }}</span></div>
+                            <div class="item"><span class="label">工具数:</span><span class="value">{{ req.summary.tools_count }}</span></div>
+                            {% if req.summary.temperature is not none %}
+                            <div class="item"><span class="label">temperature:</span><span class="value">{{ req.summary.temperature }}</span></div>
+                            {% endif %}
+                            {% if req.summary.max_tokens %}
+                            <div class="item"><span class="label">max_tokens:</span><span class="value">{{ req.summary.max_tokens }}</span></div>
+                            {% endif %}
+                            {% if req.has_response %}
+                            <div class="item"><span class="label">响应耗时:</span><span class="value" style="color:#276749">{{ req.response_duration }}</span></div>
+                            {% endif %}
+                            {% if req.summary.system_preview %}
+                            <div class="item" style="width:100%">
+                                <span class="label">system:</span>
+                                <span class="value monospace" style="font-size:0.8em; font-weight:normal; color:#4a5568">{{ req.summary.system_preview }}...</span>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- 请求 / 响应 子标签 -->
+                        {% set call_tab_group = "call-tabs-" ~ run_idx ~ "-" ~ loop.index %}
+                        {% set call_req_tab = "call-req-" ~ run_idx ~ "-" ~ loop.index %}
+                        {% set call_resp_tab = "call-resp-" ~ run_idx ~ "-" ~ loop.index %}
+                        <div class="tab-group" id="{{ call_tab_group }}" style="margin:0; border:none">
+                            <div class="tabs" style="padding:0 16px; margin-bottom:0">
+                                <button class="tab-btn" data-tab="{{ call_req_tab }}"
+                                    onclick="switchTab('{{ call_tab_group }}', '{{ call_req_tab }}')">
+                                    &#x1F4E4; 请求 Payload
+                                </button>
+                                <button class="tab-btn" data-tab="{{ call_resp_tab }}"
+                                    onclick="switchTab('{{ call_tab_group }}', '{{ call_resp_tab }}')">
+                                    &#x1F4E5; 响应
+                                    {% if req.has_response %}
+                                    <span class="badge badge-ok" style="font-size:0.7em; margin-left:4px">{{ req.sse_event_count }} 事件</span>
+                                    {% else %}
+                                    <span class="badge badge-count" style="font-size:0.7em; margin-left:4px">待记录</span>
+                                    {% endif %}
+                                </button>
+                            </div>
+
+                            <!-- 请求 Payload 子标签页 -->
+                            <div class="tab-panel" id="{{ call_req_tab }}">
+                                <div style="padding:16px">
+                                    <div style="font-size:0.85em; font-weight:600; color:#4a5568; margin-bottom:8px">
+                                        &#x1F4CB; 完整请求 Payload（点击节点展开/收起）
+                                    </div>
+                                    <div class="json-formatter-container" id="json-fmt-{{ run_idx }}-{{ loop.index }}">
+                                        <!-- 由 JS 填充 -->
+                                    </div>
+                                    <script type="application/json" id="json-data-{{ run_idx }}-{{ loop.index }}" style="display:none">{{ req.payload_json | safe }}</script>
+                                </div>
+                            </div>
+
+                            <!-- 响应子标签页 -->
+                            <div class="tab-panel" id="{{ call_resp_tab }}">
+                                {% if not req.has_response %}
+                                <p class="text-muted text-sm" style="padding:20px; text-align:center">尚无响应记录（可能此次调用未完成）</p>
+                                {% else %}
+                                {% if req.response_error %}
+                                <div class="error-box" style="margin:16px">
+                                    <strong>&#x274C; 响应错误:</strong> {{ req.response_error }}
+                                </div>
+                                {% endif %}
+
+                                <!-- SSE 事件列表 -->
+                                <div style="padding:16px 16px 8px">
+                                    <div style="font-size:0.85em; font-weight:600; color:#4a5568; margin-bottom:8px">
+                                        &#x26A1; SSE 事件流（{{ req.sse_event_count }} 个事件，已省略 delta 中间帧的 partial snapshot）
+                                    </div>
+                                    <div class="sse-event-list" id="sse-list-{{ run_idx }}-{{ loop.index }}">
+                                        <!-- 由 JS 渲染 -->
+                                    </div>
+                                    <!-- summary 用于渲染 badge 标签，full 用于点击查看详情 -->
+                                    <script type="application/json" id="sse-data-{{ run_idx }}-{{ loop.index }}" style="display:none">{{ req.sse_events_json | safe }}</script>
+                                    <script type="application/json" id="sse-full-{{ run_idx }}-{{ loop.index }}" style="display:none">{{ req.sse_events_full_json | safe }}</script>
+                                </div>
+
+                                <!-- 完整响应 JSON -->
+                                <div style="padding:8px 16px 16px">
+                                    <div style="font-size:0.85em; font-weight:600; color:#4a5568; margin-bottom:8px">
+                                        &#x1F4E5; 完整响应 Payload（AssistantMessage）
+                                    </div>
+                                    <div class="json-formatter-container" id="resp-fmt-{{ run_idx }}-{{ loop.index }}">
+                                        <!-- 由 JS 填充 -->
+                                    </div>
+                                    <script type="application/json" id="resp-data-{{ run_idx }}-{{ loop.index }}" style="display:none">{{ req.response_payload_json | safe }}</script>
+                                </div>
+                                {% endif %}
+                            </div>
+                        </div><!-- end call sub-tabs -->
+                    </div>
+                </div>
+                {% endfor %}
+                {% endif %}
+            </div>
+
+            <!-- Token 用量标签页 -->
+            <div class="tab-panel" id="tab-usage-{{ loop.index }}">
+                {% if run.usage %}
+                <div class="usage-grid">
+                    {% for key, val in run.usage.items() %}
+                    <div class="usage-item">
+                        <div class="label">{{ key | replace("_", " ") | title }}</div>
+                        <div class="value">{{ val }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                <div class="mt-4">
+                    <strong style="font-size:0.85em; color:#4a5568">完整用量 JSON</strong>
+                    <div class="code-block mt-2">{{ run.usage_json }}</div>
+                </div>
+                {% else %}
+                <p class="text-muted text-sm" style="padding:20px; text-align:center">暂无用量数据</p>
+                {% endif %}
+            </div>
+        </div><!-- end tab-group -->
+
+    </div><!-- end padding -->
+</div><!-- end run-card -->
+{% endfor %}
+
+{% if not runs %}
+<div class="card">
+    <div class="card-body" style="text-align:center; padding:48px; color:#718096">
+        <p>该会话文件中暂无有效数据</p>
+    </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+var SSE_BADGE_BG = {
+    start:'#bee3f8', text_start:'#c6f6d5', text_delta:'#c6f6d5', text_end:'#c6f6d5',
+    thinking_start:'#fefcbf', thinking_delta:'#fefcbf', thinking_end:'#fefcbf',
+    toolcall_start:'#e9d8fd', toolcall_delta:'#e9d8fd', toolcall_end:'#e9d8fd',
+    done:'#c6f6d5', error:'#fed7d7'
+};
+var SSE_BADGE_FG = {
+    start:'#2b6cb0', text_start:'#276749', text_delta:'#276749', text_end:'#276749',
+    thinking_start:'#744210', thinking_delta:'#744210', thinking_end:'#744210',
+    toolcall_start:'#553c9a', toolcall_delta:'#553c9a', toolcall_end:'#553c9a',
+    done:'#276749', error:'#c53030'
+};
+
+// --- SSE Modal state ---
+var _sseModalEvents = [];
+var _sseModalIdx = 0;
+
+function openSseModal(events, idx) {
+    _sseModalEvents = events;
+    _sseModalIdx = idx;
+    renderSseModalContent();
+    document.getElementById('sse-modal-overlay').classList.add('open');
+}
+
+function closeSseModal(e) {
+    if (e && e.target !== document.getElementById('sse-modal-overlay')) return;
+    document.getElementById('sse-modal-overlay').classList.remove('open');
+}
+
+function navigateSseModal(delta) {
+    _sseModalIdx = Math.max(0, Math.min(_sseModalEvents.length - 1, _sseModalIdx + delta));
+    renderSseModalContent();
+}
+
+function renderSseModalContent() {
+    var ev = _sseModalEvents[_sseModalIdx];
+    if (!ev) return;
+    var t = ev.type || '?';
+    var bg = SSE_BADGE_BG[t] || '#e2e8f0';
+    var fg = SSE_BADGE_FG[t] || '#4a5568';
+    var titleEl = document.getElementById('sse-modal-title');
+    titleEl.textContent = '';
+    var typeBadge = document.createElement('span');
+    typeBadge.style.cssText = 'background:' + bg + ';color:' + fg + ';padding:2px 8px;border-radius:8px;font-size:0.9em;margin-right:8px';
+    typeBadge.textContent = t;
+    titleEl.appendChild(typeBadge);
+    titleEl.appendChild(document.createTextNode('事件 #' + (_sseModalIdx + 1)));
+
+    var jsonEl = document.getElementById('sse-modal-json');
+    jsonEl.textContent = '';
+    try {
+        var formatter = new JSONFormatter(ev, 4, { hoverPreviewEnabled: true, hoverPreviewArrayCount: 8, hoverPreviewFieldCount: 8 });
+        jsonEl.appendChild(formatter.render());
+    } catch(e) {
+        jsonEl.textContent = JSON.stringify(ev, null, 2);
+    }
+
+    var navLabel = document.getElementById('sse-nav-label');
+    navLabel.textContent = (_sseModalIdx + 1) + ' / ' + _sseModalEvents.length;
+    document.getElementById('sse-nav-prev').disabled = (_sseModalIdx === 0);
+    document.getElementById('sse-nav-next').disabled = (_sseModalIdx === _sseModalEvents.length - 1);
+}
+
+// Close modal on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape') document.getElementById('sse-modal-overlay').classList.remove('open');
+    else if (e.key === 'ArrowLeft' && document.getElementById('sse-modal-overlay').classList.contains('open')) navigateSseModal(-1);
+    else if (e.key === 'ArrowRight' && document.getElementById('sse-modal-overlay').classList.contains('open')) navigateSseModal(1);
+});
+
+function makeSseBadge(ev, fullEvents, idx) {
+    var t = ev.type || '?';
+    var badge = document.createElement('button');
+    badge.className = 'sse-badge-btn';
+    badge.style.cssText = 'background:' + (SSE_BADGE_BG[t]||'#e2e8f0') + ';color:' + (SSE_BADGE_FG[t]||'#4a5568') + ';padding:2px 7px;border-radius:10px;white-space:nowrap;font-size:inherit';
+    badge.title = '点击查看完整事件内容';
+    badge.textContent = t;
+    if ((t === 'text_delta' || t === 'thinking_delta') && ev.delta) {
+        var extra = document.createElement('span');
+        extra.style.opacity = '0.7';
+        extra.textContent = ' ' + ev.delta.slice(0, 40) + (ev.delta.length > 40 ? '\u2026' : '');
+        badge.appendChild(extra);
+    } else if (t === 'toolcall_end' && ev.toolCall) {
+        var extra = document.createElement('span');
+        extra.style.color = '#553c9a';
+        extra.textContent = ' ' + (ev.toolCall.name || '?');
+        badge.appendChild(extra);
+    } else if ((t === 'done' || t === 'error') && ev.reason) {
+        var extra = document.createElement('span');
+        extra.style.opacity = '0.8';
+        extra.textContent = ' ' + ev.reason;
+        badge.appendChild(extra);
+    }
+    badge.addEventListener('click', function() { openSseModal(fullEvents, idx); });
+    return badge;
+}
+
+function renderSseList(containerId, dataId) {
+    var container = document.getElementById(containerId);
+    var dataEl = document.getElementById(dataId);
+    if (!container || !dataEl || container.children.length > 0) return;
+    // Load summary events for badge labels
+    var summaryEvents;
+    try { summaryEvents = JSON.parse(dataEl.textContent || '[]'); } catch(e) { container.textContent = '解析失败'; return; }
+    // Load full events for modal detail view
+    var fullDataEl = document.getElementById(dataId.replace('sse-data-', 'sse-full-'));
+    var fullEvents = summaryEvents; // fallback to summary if full not available
+    if (fullDataEl) {
+        try { fullEvents = JSON.parse(fullDataEl.textContent || '[]'); } catch(e) {}
+    }
+    if (!Array.isArray(summaryEvents) || summaryEvents.length === 0) {
+        var p = document.createElement('p');
+        p.className = 'text-muted text-sm';
+        p.style.padding = '8px';
+        p.textContent = '无 SSE 事件';
+        container.appendChild(p);
+        return;
+    }
+    var wrap = document.createElement('div');
+    wrap.style.cssText = 'display:flex; flex-wrap:wrap; gap:4px; font-size:0.8em';
+    summaryEvents.forEach(function(ev, i) { wrap.appendChild(makeSseBadge(ev, fullEvents, i)); });
+    container.appendChild(wrap);
+}
+
+function initJsonFmt(container, dataEl, depth) {
+    if (!container || !dataEl || container.children.length > 0) return;
+    try {
+        var data = JSON.parse(dataEl.textContent || 'null');
+        if (data === null) { container.textContent = 'null'; return; }
+        var formatter = new JSONFormatter(data, depth || 2, {
+            hoverPreviewEnabled: true, hoverPreviewArrayCount: 5, hoverPreviewFieldCount: 5
+        });
+        container.appendChild(formatter.render());
+    } catch(e) { container.textContent = dataEl.textContent; }
+}
+
+function toggleLlmCall(header) {
+    var body = header.nextElementSibling;
+    var arrow = header.querySelector('.arrow');
+    if (!body) return;
+    var isOpen = body.classList.contains('open');
+    body.classList.toggle('open');
+    if (arrow) arrow.style.transform = isOpen ? '' : 'rotate(90deg)';
+
+    if (!isOpen) {
+        // Request payload JSON formatters
+        body.querySelectorAll('[id^="json-fmt-"]').forEach(function(c) {
+            initJsonFmt(c, document.getElementById(c.id.replace('json-fmt-', 'json-data-')), 2);
+        });
+        // Response payload JSON formatters
+        body.querySelectorAll('[id^="resp-fmt-"]').forEach(function(c) {
+            initJsonFmt(c, document.getElementById(c.id.replace('resp-fmt-', 'resp-data-')), 3);
+        });
+        // SSE event badge lists
+        body.querySelectorAll('[id^="sse-list-"]').forEach(function(c) {
+            renderSseList(c.id, c.id.replace('sse-list-', 'sse-data-'));
+        });
+        // Activate first sub-tab in each nested tab-group
+        body.querySelectorAll('.tab-group').forEach(function(group) {
+            if (group.dataset.tabsInited) return;
+            group.dataset.tabsInited = '1';
+            var firstBtn = group.querySelector('.tab-btn');
+            if (firstBtn) {
+                var tabId = firstBtn.getAttribute('data-tab');
+                if (tabId) {
+                    firstBtn.classList.add('active');
+                    var panel = document.getElementById(tabId);
+                    if (panel) panel.classList.add('active');
+                }
+            }
+        });
+    }
+}
+
+// Activate first tab for top-level run tab groups on page load
+document.addEventListener('DOMContentLoaded', function() {
+    document.querySelectorAll('.tab-group').forEach(function(group) {
+        if (group.closest('.llm-call-body')) return; // skip nested, handled lazily
+        var firstBtn = group.querySelector('.tab-btn');
+        if (firstBtn) {
+            var tabId = firstBtn.getAttribute('data-tab');
+            if (tabId) {
+                firstBtn.classList.add('active');
+                var panel = document.getElementById(tabId);
+                if (panel) panel.classList.add('active');
+            }
+        }
+    });
+});
+</script>
+{% endblock %}

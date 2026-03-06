@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+
+{% block title %}OpenClaw LLM 日志 - 会话列表{% endblock %}
+{% block subtitle %}日志目录: {{ log_dir }}{% endblock %}
+
+{% block content %}
+<div class="card">
+    <div class="card-header" style="display:flex; justify-content:space-between; align-items:center">
+        <span>📂 LLM API 会话列表</span>
+        <span class="badge badge-count">共 {{ files|length }} 个会话</span>
+    </div>
+    {% if not files %}
+    <div class="card-body" style="text-align:center; padding:48px; color:#718096">
+        <p style="font-size:1.2em; margin-bottom:12px">📭 暂无日志文件</p>
+        <p>日志将在 openclaw 运行时自动生成</p>
+        <p class="text-sm mt-2">路径: <code class="monospace">{{ log_dir }}</code></p>
+        <p class="text-sm mt-2">如需禁用日志,设置环境变量 <code class="monospace">OPENCLAW_LLM_API_LOG=0</code></p>
+    </div>
+    {% else %}
+    <table>
+        <thead>
+            <tr>
+                <th>会话 ID</th>
+                <th>对话轮次</th>
+                <th>LLM调用次数</th>
+                <th>文件大小</th>
+                <th>最后修改</th>
+                <th>操作</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for f in files %}
+            <tr>
+                <td>
+                    <span class="monospace" style="font-size:0.8em; color:#4a5568">{{ f.session_id[:60] }}{% if f.session_id|length > 60 %}...{% endif %}</span>
+                </td>
+                <td><span class="badge badge-count">{{ f.turns }}</span></td>
+                <td><span class="badge badge-api">{{ f.llm_calls }}</span></td>
+                <td class="text-muted text-sm">
+                    {% if f.size < 1024 %}{{ f.size }} B
+                    {% elif f.size < 1048576 %}{{ "%.1f"|format(f.size/1024) }} KB
+                    {% else %}{{ "%.1f"|format(f.size/1048576) }} MB{% endif %}
+                </td>
+                <td class="text-muted text-sm">{{ f.modified }}</td>
+                <td>
+                    <a href="/session/{{ f.session_id }}" style="color:#3182ce; font-weight:600; text-decoration:none">查看详情 →</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% endif %}
+</div>
+{% endblock %}
